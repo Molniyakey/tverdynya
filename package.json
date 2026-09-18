@@ -1,0 +1,20 @@
+{
+  "name": "tverdynya",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Твердыня — славянская tower defense с развитием поселения",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0 --port 5173",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview --host 0.0.0.0 --port 5173",
+    "typecheck": "tsc -b --noEmit"
+  },
+  "dependencies": {
+    "phaser": "^3.88.2"
+  },
+  "devDependencies": {
+    "typescript": "~5.7.3",
+    "vite": "^6.2.0"
+  }
+}
