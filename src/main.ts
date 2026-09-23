@@ -1,9 +1,11 @@
 import Phaser from 'phaser';
-import { GAME_HEIGHT, GAME_WIDTH } from './data/map';
 import { BootScene } from './scenes/BootScene';
-import { MenuScene } from './scenes/MenuScene';
-import { HeroSelectScene } from './scenes/HeroSelectScene';
-import { GameScene } from './scenes/GameScene';
+import { GameScene } from './scenes/VerticalSliceScene';
+import { MainMenuScene } from './scenes/MainMenuScene';
+import { MetaProgressionScene } from './scenes/MetaProgressionScene';
+import { ResultsScene } from './scenes/ResultsScene';
+import { RunSetupScene } from './scenes/RunSetupScene';
+import { SettingsScene } from './scenes/SettingsScene';
 
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
@@ -12,10 +14,14 @@ const config: Phaser.Types.Core.GameConfig = {
   scale: {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,
-    width: GAME_WIDTH,
-    height: GAME_HEIGHT,
+    width: 1280,
+    height: 720,
   },
-  scene: [BootScene, MenuScene, HeroSelectScene, GameScene],
+  render: {
+    pixelArt: true,
+    antialias: false,
+  },
+  scene: [BootScene, MainMenuScene, RunSetupScene, GameScene, MetaProgressionScene, SettingsScene, ResultsScene],
 };
 
 new Phaser.Game(config);

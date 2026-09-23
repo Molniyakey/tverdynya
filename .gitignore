@@ -24,3 +24,7 @@ Thumbs.db
 .env
 .env.*
 !.env.example
+
+# Desktop and test artifacts
+release/
+coverage/

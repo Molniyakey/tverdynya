@@ -9,7 +9,7 @@ if [ ! -f package.json ]; then
 fi
 
 # Ставим зависимости в volume tverdynya_node_modules, не в систему Windows
-if [ ! -d node_modules/phaser ] || [ ! -d node_modules/vite ]; then
+if [ ! -d node_modules/phaser ] || [ ! -d node_modules/vite ] || [ ! -d node_modules/vitest ]; then
   echo "→ Установка npm-зависимостей внутри контейнера..."
   npm install
 fi
