@@ -189,6 +189,13 @@ export class GameSimulation {
     this.state.nightResolved = false;
     const foodUpkeep = Math.ceil(this.state.population.total / 2) + this.state.units.length;
     this.state.resources.food = Math.max(0, this.state.resources.food - foodUpkeep);
+    this.state.hero.hp = Math.min(
+      this.state.hero.maxHp,
+      this.state.hero.hp + this.state.hero.maxHp * 0.35,
+    );
+    for (const unit of this.state.units) {
+      unit.hp = Math.min(unit.maxHp, unit.hp + unit.maxHp * 0.25);
+    }
     this.events.push({ type: 'dawn-started', day: this.state.day });
   }
 
@@ -357,9 +364,13 @@ export class GameSimulation {
   private updateHero(dt: number, multiplier: number): void {
     const hero = this.state.hero;
     hero.attackCooldown -= dt;
+    if (hero.hp <= hero.maxHp * 0.3) {
+      moveTowards(hero, { x: GATE_POSITION.x, y: GATE_POSITION.y + 70 }, 82 * dt);
+      return;
+    }
     const target = nearestEnemy(hero, this.state.enemies, 55);
     if (target && hero.attackCooldown <= 0) {
-      target.hp -= 16 * multiplier;
+      target.hp = Math.max(0, target.hp - 16 * multiplier);
       hero.attackCooldown = 0.75;
       return;
     }
@@ -378,7 +389,7 @@ export class GameSimulation {
     }
     if (distance(unit, target) <= definition.range) {
       if (unit.attackCooldown <= 0) {
-        target.hp -= definition.damage * multiplier;
+        target.hp = Math.max(0, target.hp - definition.damage * multiplier);
         if (unit.kind === 'volkhv') {
           for (const ally of this.state.units) {
             if (distance(unit, ally) <= 75) {
@@ -407,7 +418,7 @@ export class GameSimulation {
       }
       const target = nearestEnemy(plot, this.state.enemies, attack.range);
       if (target && building.attackCooldown <= 0) {
-        target.hp -= attack.damage * multiplier;
+        target.hp = Math.max(0, target.hp - attack.damage * multiplier);
         building.attackCooldown = attack.cooldown;
       }
     }
@@ -428,7 +439,7 @@ export class GameSimulation {
 
     if (target) {
       if (targetDistance <= definition.range && enemy.attackCooldown <= 0) {
-        target.hp -= definition.damage;
+        target.hp = Math.max(0, target.hp - definition.damage);
         enemy.attackCooldown = definition.cooldown;
       } else {
         moveTowards(enemy, target, definition.speed * dt);
@@ -439,7 +450,7 @@ export class GameSimulation {
     const gateDistance = distance(enemy, GATE_POSITION);
     if (gateDistance <= definition.range + 18) {
       if (enemy.attackCooldown <= 0) {
-        this.state.gateHp -= definition.damage;
+        this.state.gateHp = Math.max(0, this.state.gateHp - definition.damage);
         enemy.attackCooldown = definition.cooldown;
         this.events.push({ type: 'gate-damaged', amount: definition.damage });
       }

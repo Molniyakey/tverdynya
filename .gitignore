@@ -28,3 +28,6 @@ Thumbs.db
 # Desktop and test artifacts
 release/
 coverage/
+
+# Local concept-art sources
+art_test/

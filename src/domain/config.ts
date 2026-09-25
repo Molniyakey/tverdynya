@@ -38,7 +38,7 @@ export const BUILDINGS: Record<BuildingKind, BuildingDefinition> = {
   cookhouse: { kind: 'cookhouse', name: 'Поварня', description: '2 зерна → 3 еды', zone: 'settlement', cost: { wood: 12, stone: 4 }, buildTime: 10, jobs: 2, cycle: 7, input: { grain: 2 }, output: { food: 3 }, hp: 55, color: 0xb47743 },
   mine: { kind: 'mine', name: 'Рудник', description: 'Добывает руду', zone: 'settlement', cost: { wood: 12, stone: 5 }, buildTime: 12, jobs: 2, cycle: 8, output: { ore: 2 }, hp: 65, color: 0x58616b },
   smithy: { kind: 'smithy', name: 'Кузница', description: '2 руды → 1 оружие', zone: 'settlement', cost: { wood: 15, stone: 8 }, buildTime: 14, jobs: 2, cycle: 9, input: { ore: 2 }, output: { weapons: 1 }, hp: 70, color: 0x8f4b38 },
-  barracks: { kind: 'barracks', name: 'Дружинный двор', description: 'Позволяет нанимать дружину', zone: 'settlement', cost: { wood: 18, stone: 6 }, buildTime: 15, jobs: 1, cycle: 0, hp: 85, color: 0x8c3945 },
+  barracks: { kind: 'barracks', name: 'Дружинный двор', description: 'Позволяет нанимать дружину', zone: 'settlement', cost: { wood: 18, stone: 6 }, buildTime: 15, jobs: 0, cycle: 0, hp: 85, color: 0x8c3945 },
   tower: { kind: 'tower', name: 'Вышка', description: 'Обстреливает Навь', zone: 'defense', cost: { wood: 12, stone: 10 }, buildTime: 12, jobs: 1, cycle: 0, hp: 100, attack: { damage: 10, range: 175, cooldown: 1.2 }, color: 0x72523c },
   ward: { kind: 'ward', name: 'Обережный столб', description: 'Поддерживает защитников', zone: 'defense', cost: { wood: 10, silver: 2 }, buildTime: 10, jobs: 1, cycle: 0, hp: 75, color: 0x467786 },
 };

@@ -10,6 +10,7 @@ export type ResourceKey =
 export type RunResources = Record<ResourceKey, number>;
 export type WorkPriority = 'high' | 'normal' | 'low' | 'disabled';
 export type RunStatus = 'running' | 'victory' | 'defeat';
+export type SimulationSpeed = 0 | 1 | 2 | 4 | 8;
 export type BuildingKind =
   | 'house'
   | 'lumber'
@@ -105,7 +106,7 @@ export interface RunState {
   chapterId: 'first-fortress';
   day: number;
   timeOfDay: number;
-  speed: 0 | 1 | 2;
+  speed: SimulationSpeed;
   nightActive: boolean;
   nightResolved: boolean;
   resources: RunResources;
@@ -130,7 +131,7 @@ export type GameCommand =
   | { type: 'set-rally-point'; x: number; y: number }
   | { type: 'use-hero-ability'; target?: WorldPoint }
   | { type: 'explore-node'; nodeId: string }
-  | { type: 'set-speed'; speed: 0 | 1 | 2 };
+  | { type: 'set-speed'; speed: SimulationSpeed };
 
 export type GameEvent =
   | { type: 'command-rejected'; reason: string }

@@ -1,5 +1,7 @@
 import Phaser from 'phaser';
+import { isDebugMode } from '../application/debug';
 import { saveRepository } from '../application/save';
+import { RunTelemetryRecorder } from '../application/telemetry';
 import { AudioFeedback } from '../presentation/AudioFeedback';
 import {
   BUILDINGS,
@@ -14,6 +16,7 @@ import { GameSimulation } from '../domain/GameSimulation';
 import type {
   BuildingKind,
   BuildingState,
+  GameCommand,
   GameEvent,
   ResourceKey,
   RunState,
@@ -28,12 +31,16 @@ const PRIORITIES: WorkPriority[] = ['high', 'normal', 'low', 'disabled'];
 
 export class GameScene extends Phaser.Scene {
   private simulation!: GameSimulation;
+  private telemetry!: RunTelemetryRecorder;
+  private readonly debugMode = isDebugMode();
   private readonly audio = new AudioFeedback(() => saveRepository.loadProfile().settings.masterVolume);
   private graphics!: Phaser.GameObjects.Graphics;
+  private readonly buildingSprites = new Map<string, Phaser.GameObjects.Image>();
   private hudText!: Phaser.GameObjects.Text;
   private panelText!: Phaser.GameObjects.Text;
   private toastText!: Phaser.GameObjects.Text;
   private tutorialText!: Phaser.GameObjects.Text;
+  private debugText?: Phaser.GameObjects.Text;
   private selectedBuilding: BuildingKind | null = null;
   private toastTimer = 0;
 
@@ -46,6 +53,7 @@ export class GameScene extends Phaser.Scene {
     const state = restored ?? createRun(`TV-${Date.now().toString(36).toUpperCase()}`);
     this.registry.remove('runState');
     this.simulation = new GameSimulation(state);
+    this.telemetry = new RunTelemetryRecorder(state);
     saveRepository.saveRun(state);
 
     this.graphics = this.add.graphics();
@@ -59,6 +67,9 @@ export class GameScene extends Phaser.Scene {
       padding: { x: 10, y: 8 },
       wordWrap: { width: 620 },
     }).setDepth(8);
+    if (this.debugMode) {
+      this.debugText = this.add.text(680, 64, '', this.textStyle(13, '#ffd56a')).setDepth(9);
+    }
 
     this.createControls();
     this.createBuildButtons();
@@ -68,8 +79,12 @@ export class GameScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number): void {
-    this.simulation.advance(delta / 1000);
-    this.handleEvents(this.simulation.drainEvents());
+    const realDeltaSec = delta / 1000;
+    this.simulation.advance(realDeltaSec);
+    this.telemetry.update(realDeltaSec, this.simulation.state);
+    const events = this.simulation.drainEvents();
+    this.telemetry.recordEvents(events, this.simulation.state);
+    this.handleEvents(events);
     this.updateTutorial();
     this.drawWorld();
     this.refreshTexts();
@@ -88,7 +103,7 @@ export class GameScene extends Phaser.Scene {
         return;
       }
       if (pointer.rightButtonDown()) {
-        this.simulation.dispatch({ type: 'set-rally-point', x: pointer.x, y: pointer.y });
+        this.dispatch({ type: 'set-rally-point', x: pointer.x, y: pointer.y });
         this.showToast('Точка сбора дружины перенесена');
         return;
       }
@@ -96,7 +111,7 @@ export class GameScene extends Phaser.Scene {
         (candidate) => !candidate.explored && Phaser.Math.Distance.Between(pointer.x, pointer.y, candidate.x, candidate.y) < 28,
       );
       if (node) {
-        this.simulation.dispatch({ type: 'explore-node', nodeId: node.id });
+        this.dispatch({ type: 'explore-node', nodeId: node.id });
         return;
       }
       const plot = this.simulation.state.plots.find(
@@ -108,7 +123,7 @@ export class GameScene extends Phaser.Scene {
       if (plot.occupiedBy) {
         this.cyclePriority(plot.occupiedBy);
       } else if (this.selectedBuilding) {
-        this.simulation.dispatch({
+        this.dispatch({
           type: 'place-building', buildingId: this.selectedBuilding, plotId: plot.id,
         });
       } else {
@@ -117,24 +132,35 @@ export class GameScene extends Phaser.Scene {
     });
 
     this.input.keyboard?.on('keydown-SPACE', () => {
-      this.simulation.dispatch({ type: 'set-speed', speed: this.simulation.state.speed === 0 ? 1 : 0 });
+      this.dispatch({ type: 'set-speed', speed: this.simulation.state.speed === 0 ? 1 : 0 });
     });
-    this.input.keyboard?.on('keydown-ONE', () => this.simulation.dispatch({ type: 'set-speed', speed: 1 }));
-    this.input.keyboard?.on('keydown-TWO', () => this.simulation.dispatch({ type: 'set-speed', speed: 2 }));
-    this.input.keyboard?.on('keydown-Q', () => this.simulation.dispatch({ type: 'use-hero-ability' }));
+    this.input.keyboard?.on('keydown-ONE', () => this.dispatch({ type: 'set-speed', speed: 1 }));
+    this.input.keyboard?.on('keydown-TWO', () => this.dispatch({ type: 'set-speed', speed: 2 }));
+    if (this.debugMode) {
+      this.input.keyboard?.on('keydown-FOUR', () => this.dispatch({ type: 'set-speed', speed: 4 }));
+      this.input.keyboard?.on('keydown-EIGHT', () => this.dispatch({ type: 'set-speed', speed: 8 }));
+    }
+    this.input.keyboard?.on('keydown-Q', () => this.dispatch({ type: 'use-hero-ability' }));
   }
 
   private createControls(): void {
-    this.createButton(735, 25, 42, 30, 'Ⅱ', () => this.simulation.dispatch({ type: 'set-speed', speed: 0 }));
-    this.createButton(783, 25, 42, 30, '1×', () => this.simulation.dispatch({ type: 'set-speed', speed: 1 }));
-    this.createButton(831, 25, 42, 30, '2×', () => this.simulation.dispatch({ type: 'set-speed', speed: 2 }));
-    this.createButton(901, 25, 84, 30, 'Клич [Q]', () => this.simulation.dispatch({ type: 'use-hero-ability' }));
+    const startX = this.debugMode ? 650 : 735;
+    this.createButton(startX, 25, 42, 30, 'Ⅱ', () => this.dispatch({ type: 'set-speed', speed: 0 }));
+    this.createButton(startX + 48, 25, 42, 30, '1×', () => this.dispatch({ type: 'set-speed', speed: 1 }));
+    this.createButton(startX + 96, 25, 42, 30, '2×', () => this.dispatch({ type: 'set-speed', speed: 2 }));
+    if (this.debugMode) {
+      this.createButton(startX + 144, 25, 42, 30, '4×', () => this.dispatch({ type: 'set-speed', speed: 4 }));
+      this.createButton(startX + 192, 25, 42, 30, '8×', () => this.dispatch({ type: 'set-speed', speed: 8 }));
+      this.createButton(PANEL_X + 150, 645, 250, 30, 'Экспорт телеметрии', () => this.telemetry.exportJson());
+    }
+    this.createButton(925, 25, 92, 30, 'Клич [Q]', () => this.dispatch({ type: 'use-hero-ability' }));
     this.createButton(PANEL_X + 150, 690, 250, 34, 'Сохранить и выйти', () => {
       if (this.simulation.state.nightActive) {
         this.showToast('Ночью можно выйти только к последнему рассвету');
         return;
       }
       saveRepository.saveRun(this.simulation.state);
+      this.telemetry.checkpoint(this.simulation.state);
       this.scene.start('Menu');
     });
   }
@@ -149,7 +175,7 @@ export class GameScene extends Phaser.Scene {
       this.createButton(x, y, 136, 34, BUILDINGS[kind].name, () => {
         this.selectedBuilding = this.selectedBuilding === kind ? null : kind;
         this.showToast(this.selectedBuilding ? `Выбрано: ${BUILDINGS[kind].name}` : 'Строительство отменено');
-      });
+      }, BUILDINGS[kind].color);
     });
   }
 
@@ -157,7 +183,7 @@ export class GameScene extends Phaser.Scene {
     const kinds = Object.keys(UNITS) as UnitKind[];
     kinds.forEach((kind, index) => {
       this.createButton(PANEL_X + 54 + index * 95, 455, 88, 34, UNITS[kind].name, () => {
-        this.simulation.dispatch({ type: 'recruit-unit', unitId: kind });
+        this.dispatch({ type: 'recruit-unit', unitId: kind });
       });
     });
   }
@@ -169,19 +195,31 @@ export class GameScene extends Phaser.Scene {
     height: number,
     label: string,
     action: () => void,
+    fillColor = 0x3a5143,
   ): void {
-    const button = this.add.rectangle(x, y, width, height, 0x3a5143)
+    const hoverColor = this.lightenColor(fillColor, 28);
+    const button = this.add.rectangle(x, y, width, height, fillColor)
       .setStrokeStyle(1, 0xb9a978).setInteractive({ useHandCursor: true }).setDepth(6);
     this.add.text(x, y, label, this.textStyle(13, '#f0dfb0')).setOrigin(0.5).setDepth(7);
     button.on('pointerup', action);
-    button.on('pointerover', () => button.setFillStyle(0x52745d));
-    button.on('pointerout', () => button.setFillStyle(0x3a5143));
+    button.on('pointerover', () => button.setFillStyle(hoverColor));
+    button.on('pointerout', () => button.setFillStyle(fillColor));
+  }
+
+  private lightenColor(color: number, amount: number): number {
+    const red = Math.min(255, ((color >> 16) & 0xff) + amount);
+    const green = Math.min(255, ((color >> 8) & 0xff) + amount);
+    const blue = Math.min(255, (color & 0xff) + amount);
+    return (red << 16) | (green << 8) | blue;
   }
 
   private drawWorld(): void {
     const state = this.simulation.state;
     const graphics = this.graphics;
     graphics.clear();
+    for (const sprite of this.buildingSprites.values()) {
+      sprite.setVisible(false);
+    }
 
     graphics.fillStyle(state.nightActive ? 0x182030 : 0x304b35).fillRect(0, 0, WORLD_WIDTH, 720);
     graphics.fillStyle(state.nightActive ? 0x21293b : 0x3f6748).fillRect(0, 55, WORLD_WIDTH, 190);
@@ -241,6 +279,21 @@ export class GameScene extends Phaser.Scene {
     y: number,
   ): void {
     const definition = BUILDINGS[building.kind];
+    if (building.kind === 'house') {
+      let sprite = this.buildingSprites.get(building.id);
+      if (!sprite) {
+        sprite = this.add.image(x, y + 25, 'building-house').setOrigin(0.5, 1).setDepth(1);
+        this.buildingSprites.set(building.id, sprite);
+      }
+      sprite.setPosition(x, y + 25)
+        .setAlpha(building.status === 'constructing' ? 0.55 : 1)
+        .setVisible(true);
+      if (building.status === 'constructing') {
+        const progress = 1 - building.constructionRemaining / definition.buildTime;
+        this.drawBar(graphics, x - 24, y + 26, 48, progress, 0xe1bc58);
+      }
+      return;
+    }
     graphics.fillStyle(definition.color, building.status === 'constructing' ? 0.55 : 1)
       .fillRect(x - 27, y - 21, 54, 42);
     graphics.lineStyle(2, building.priority === 'disabled' ? 0x6b6861 : 0xe0cc91)
@@ -313,6 +366,10 @@ export class GameScene extends Phaser.Scene {
 
     const selected = this.selectedBuilding ? BUILDINGS[this.selectedBuilding] : null;
     const cost = selected ? this.formatCost(selected.cost) : 'выберите здание';
+    if (this.debugText) {
+      this.debugText.setText(`DEBUG · ${state.speed}× · враги ${state.enemies.length}/${this.telemetry.data.maxEnemies} · seed ${state.seed}`);
+    }
+
     this.panelText.setText([
       'СТРОИТЕЛЬСТВО',
       selected ? `${selected.name}: ${cost}` : cost,
@@ -339,8 +396,13 @@ export class GameScene extends Phaser.Scene {
     }
     const current = PRIORITIES.indexOf(building.priority);
     const priority = PRIORITIES[(current + 1) % PRIORITIES.length];
-    this.simulation.dispatch({ type: 'set-building-priority', buildingId, priority });
+    this.dispatch({ type: 'set-building-priority', buildingId, priority });
     this.showToast(`${BUILDINGS[building.kind].name}: приоритет ${priority}`);
+  }
+
+  private dispatch(command: GameCommand): void {
+    this.telemetry.recordCommand(command);
+    this.simulation.dispatch(command);
   }
 
   private handleEvents(events: GameEvent[]): void {
