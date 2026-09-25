@@ -3,11 +3,10 @@ import { isDebugMode } from '../application/debug';
 import { saveRepository } from '../application/save';
 import { RunTelemetryRecorder } from '../application/telemetry';
 import { AudioFeedback } from '../presentation/AudioFeedback';
+import { PANEL_X, WORLD_WIDTH, WorldRenderer } from '../presentation/WorldRenderer';
 import {
   BUILDINGS,
-  ENEMIES,
   FINAL_DAY,
-  GATE_POSITION,
   RESOURCE_LABELS,
   UNITS,
 } from '../domain/config';
@@ -15,7 +14,6 @@ import { createRun } from '../domain/createRun';
 import { GameSimulation } from '../domain/GameSimulation';
 import type {
   BuildingKind,
-  BuildingState,
   GameCommand,
   GameEvent,
   ResourceKey,
@@ -24,9 +22,6 @@ import type {
   WorkPriority,
 } from '../domain/model';
 
-const WORLD_WIDTH = 980;
-const PANEL_X = 980;
-const PANEL_WIDTH = 300;
 const PRIORITIES: WorkPriority[] = ['high', 'normal', 'low', 'disabled'];
 
 export class GameScene extends Phaser.Scene {
@@ -34,8 +29,7 @@ export class GameScene extends Phaser.Scene {
   private telemetry!: RunTelemetryRecorder;
   private readonly debugMode = isDebugMode();
   private readonly audio = new AudioFeedback(() => saveRepository.loadProfile().settings.masterVolume);
-  private graphics!: Phaser.GameObjects.Graphics;
-  private readonly buildingSprites = new Map<string, Phaser.GameObjects.Image>();
+  private worldRenderer!: WorldRenderer;
   private hudText!: Phaser.GameObjects.Text;
   private panelText!: Phaser.GameObjects.Text;
   private toastText!: Phaser.GameObjects.Text;
@@ -56,7 +50,7 @@ export class GameScene extends Phaser.Scene {
     this.telemetry = new RunTelemetryRecorder(state);
     saveRepository.saveRun(state);
 
-    this.graphics = this.add.graphics();
+    this.worldRenderer = new WorldRenderer(this);
     this.hudText = this.add.text(14, 10, '', this.textStyle(16, '#f0dfb0')).setDepth(5);
     this.panelText = this.add.text(PANEL_X + 12, 12, '', this.textStyle(14, '#ded4b9')).setDepth(5);
     this.toastText = this.add.text(WORLD_WIDTH / 2, 670, '', this.textStyle(17, '#ffe5a1'))
@@ -86,7 +80,7 @@ export class GameScene extends Phaser.Scene {
     this.telemetry.recordEvents(events, this.simulation.state);
     this.handleEvents(events);
     this.updateTutorial();
-    this.drawWorld();
+    this.worldRenderer.render(this.simulation.state);
     this.refreshTexts();
     if (this.toastTimer > 0) {
       this.toastTimer -= delta / 1000;
@@ -211,144 +205,6 @@ export class GameScene extends Phaser.Scene {
     const green = Math.min(255, ((color >> 8) & 0xff) + amount);
     const blue = Math.min(255, (color & 0xff) + amount);
     return (red << 16) | (green << 8) | blue;
-  }
-
-  private drawWorld(): void {
-    const state = this.simulation.state;
-    const graphics = this.graphics;
-    graphics.clear();
-    for (const sprite of this.buildingSprites.values()) {
-      sprite.setVisible(false);
-    }
-
-    graphics.fillStyle(state.nightActive ? 0x182030 : 0x304b35).fillRect(0, 0, WORLD_WIDTH, 720);
-    graphics.fillStyle(state.nightActive ? 0x21293b : 0x3f6748).fillRect(0, 55, WORLD_WIDTH, 190);
-    graphics.fillStyle(0x5c614b).fillRect(0, 245, WORLD_WIDTH, 210);
-    graphics.fillStyle(0x526a43).fillRect(0, 455, WORLD_WIDTH, 265);
-    graphics.fillStyle(0x302a24).fillRect(PANEL_X, 0, PANEL_WIDTH, 720);
-
-    graphics.lineStyle(8, 0x6c4b34).lineBetween(75, 450, 905, 450);
-    graphics.fillStyle(0x49372a).fillRect(GATE_POSITION.x - 30, 430, 60, 45);
-    this.drawBar(graphics, GATE_POSITION.x - 38, 418, 76, state.gateHp / state.gateMaxHp, 0xc05a48);
-
-    for (const node of state.exploration) {
-      graphics.fillStyle(node.explored ? 0x3f493f : 0xb79b55).fillCircle(node.x, node.y, node.explored ? 11 : 18);
-      if (!node.explored) {
-        graphics.lineStyle(2, 0xf0d591).strokeCircle(node.x, node.y, 23);
-      }
-    }
-
-    for (const plot of state.plots) {
-      const building = plot.occupiedBy
-        ? state.buildings.find((candidate) => candidate.id === plot.occupiedBy)
-        : undefined;
-      if (!building) {
-        const color = plot.zone === 'defense' ? 0x8d6c49 : 0x78905f;
-        graphics.lineStyle(2, color).strokeRect(plot.x - 30, plot.y - 24, 60, 48);
-        if (plot.bonus) {
-          graphics.fillStyle(0xd8c47d).fillCircle(plot.x + 22, plot.y - 17, 5);
-        }
-        continue;
-      }
-      this.drawBuilding(graphics, building, plot.x, plot.y);
-    }
-
-    this.drawResidents(graphics);
-    this.drawHero(graphics);
-    for (const unit of state.units) {
-      const definition = UNITS[unit.kind];
-      graphics.fillStyle(definition.color).fillCircle(unit.x, unit.y, 8);
-      this.drawBar(graphics, unit.x - 10, unit.y - 15, 20, unit.hp / unit.maxHp, 0x78b66a);
-    }
-    for (const enemy of state.enemies) {
-      const definition = ENEMIES[enemy.kind];
-      const radius = enemy.kind === 'morok' ? 18 : enemy.kind === 'leshyk' ? 12 : 8;
-      graphics.fillStyle(definition.color).fillCircle(enemy.x, enemy.y, radius);
-      this.drawBar(graphics, enemy.x - radius, enemy.y - radius - 8, radius * 2, enemy.hp / enemy.maxHp, 0xb84e57);
-    }
-
-    graphics.lineStyle(2, 0xf0cf6a, 0.8).strokeCircle(state.hero.rallyPoint.x, state.hero.rallyPoint.y, 15);
-    graphics.lineBetween(state.hero.rallyPoint.x - 7, state.hero.rallyPoint.y, state.hero.rallyPoint.x + 7, state.hero.rallyPoint.y);
-    graphics.lineBetween(state.hero.rallyPoint.x, state.hero.rallyPoint.y - 7, state.hero.rallyPoint.x, state.hero.rallyPoint.y + 7);
-  }
-
-  private drawBuilding(
-    graphics: Phaser.GameObjects.Graphics,
-    building: BuildingState,
-    x: number,
-    y: number,
-  ): void {
-    const definition = BUILDINGS[building.kind];
-    if (building.kind === 'house') {
-      let sprite = this.buildingSprites.get(building.id);
-      if (!sprite) {
-        sprite = this.add.image(x, y + 25, 'building-house').setOrigin(0.5, 1).setDepth(1);
-        this.buildingSprites.set(building.id, sprite);
-      }
-      sprite.setPosition(x, y + 25)
-        .setAlpha(building.status === 'constructing' ? 0.55 : 1)
-        .setVisible(true);
-      if (building.status === 'constructing') {
-        const progress = 1 - building.constructionRemaining / definition.buildTime;
-        this.drawBar(graphics, x - 24, y + 26, 48, progress, 0xe1bc58);
-      }
-      return;
-    }
-    graphics.fillStyle(definition.color, building.status === 'constructing' ? 0.55 : 1)
-      .fillRect(x - 27, y - 21, 54, 42);
-    graphics.lineStyle(2, building.priority === 'disabled' ? 0x6b6861 : 0xe0cc91)
-      .strokeRect(x - 27, y - 21, 54, 42);
-    if (building.status === 'constructing') {
-      const progress = 1 - building.constructionRemaining / definition.buildTime;
-      this.drawBar(graphics, x - 24, y + 26, 48, progress, 0xe1bc58);
-    } else if (definition.jobs > 0) {
-      for (let index = 0; index < definition.jobs; index += 1) {
-        graphics.fillStyle(index < building.workersAssigned ? 0xf2d68f : 0x554d42)
-          .fillCircle(x - 7 + index * 14, y + 29, 4);
-      }
-    }
-  }
-
-  private drawResidents(graphics: Phaser.GameObjects.Graphics): void {
-    const state = this.simulation.state;
-    let residentIndex = 0;
-    for (const building of state.buildings) {
-      if (building.workersAssigned <= 0) {
-        continue;
-      }
-      const plot = state.plots.find((candidate) => candidate.id === building.plotId);
-      if (!plot) {
-        continue;
-      }
-      for (let index = 0; index < building.workersAssigned; index += 1) {
-        const angle = state.timeOfDay * 0.55 + residentIndex * 2.2;
-        graphics.fillStyle(0xd4b57a).fillCircle(
-          plot.x + Math.cos(angle) * 35,
-          plot.y + Math.sin(angle) * 18,
-          4,
-        );
-        residentIndex += 1;
-      }
-    }
-  }
-
-  private drawHero(graphics: Phaser.GameObjects.Graphics): void {
-    const hero = this.simulation.state.hero;
-    graphics.fillStyle(hero.abilityBuffRemaining > 0 ? 0xffd66b : 0xd29a45).fillCircle(hero.x, hero.y, 12);
-    graphics.lineStyle(2, 0xf3e0a9).strokeCircle(hero.x, hero.y, 15);
-    this.drawBar(graphics, hero.x - 16, hero.y - 23, 32, hero.hp / hero.maxHp, 0xe1b84e);
-  }
-
-  private drawBar(
-    graphics: Phaser.GameObjects.Graphics,
-    x: number,
-    y: number,
-    width: number,
-    ratio: number,
-    color: number,
-  ): void {
-    graphics.fillStyle(0x211d1a).fillRect(x, y, width, 4);
-    graphics.fillStyle(color).fillRect(x, y, Math.max(0, width * Phaser.Math.Clamp(ratio, 0, 1)), 4);
   }
 
   private refreshTexts(): void {

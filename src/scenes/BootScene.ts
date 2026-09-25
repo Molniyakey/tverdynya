@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { saveRepository } from '../application/save';
+import { preloadGameAssets } from '../presentation/AssetCatalog';
 
 export class BootScene extends Phaser.Scene {
   constructor() {
@@ -7,7 +8,7 @@ export class BootScene extends Phaser.Scene {
   }
 
   preload(): void {
-    this.load.image('building-house', 'assets/buildings/house.png');
+    preloadGameAssets(this);
   }
 
   create(): void {

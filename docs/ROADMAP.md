@@ -30,6 +30,7 @@
 ## M4 — Presentation 🔄
 
 - [x] Меню, setup, game, meta и results scenes.
+- [x] Каталог ассетов, слоистый WorldRenderer и сортировка объектов по Y.
 - [x] HUD, туториал, настройки, процедурные SFX, пауза, 1×/2× и save/quit.
 - [x] Electron-конфигурация и Windows CI для portable build.
 - [ ] Финальный pixel-art, звук и эффекты.

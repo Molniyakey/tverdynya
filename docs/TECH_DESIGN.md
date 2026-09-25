@@ -25,3 +25,12 @@
 ## Сцены
 
 `BootScene` → `MainMenuScene` → `RunSetupScene` → `GameScene` → `ResultsScene`; `MetaProgressionScene` открывается из меню и результатов.
+
+## Presentation renderer
+
+- AssetCatalog хранит ключи текстур, пути, игровые размеры и смещения ассетов.
+- BootScene загружает зарегистрированные ассеты централизованно.
+- WorldRenderer разделяет карту, мировые объекты и экранные overlays.
+- Здания, жители, дружина, герой и враги сортируются по нижней координате Y.
+- Для здания без готового изображения автоматически используется цветной placeholder из BUILDINGS.
+- HUD остаётся в GameScene и всегда рисуется поверх мира.
